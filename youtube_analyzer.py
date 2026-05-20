@@ -1,156 +1,85 @@
-from googleapiclient.discovery import build
-import json
-import os
+import requests
+from collections import Counter
 
 # =========================
-# 設定
+# YouTubeデータ取得（簡易版）
 # =========================
+def fetch_trending_videos(api_key, query="AI", max_results=10):
 
-API_KEY = "AIzaSyCxKq2XmUUE3NFWXqyeIzUiUBA1GGnGcYE"
-CHANNEL_ID = "UCSjAJUWarh09IbYsLNlu2vA"
+    url = "https://www.googleapis.com/youtube/v3/search"
 
-SCORE_FILE = "score.json"
-
-# =========================
-# YouTube API 接続
-# =========================
-
-youtube = build(
-    "youtube",
-    "v3",
-    developerKey=API_KEY
-)
-
-print("=== YOUTUBE ANALYZER START ===")
-
-# =========================
-# 最新動画取得
-# =========================
-
-search_response = youtube.search().list(
-    part="id,snippet",
-    channelId=CHANNEL_ID,
-    maxResults=20,
-    order="date",
-    type="video"
-).execute()
-
-video_ids = [
-    item["id"]["videoId"]
-    for item in search_response["items"]
-]
-
-if len(video_ids) == 0:
-    print("動画が見つかりません")
-    exit()
-
-print(f"取得動画数: {len(video_ids)}")
-
-# =========================
-# 動画統計取得
-# =========================
-
-video_response = youtube.videos().list(
-    part="statistics,snippet",
-    id=",".join(video_ids)
-).execute()
-
-# =========================
-# score.json 作成
-# =========================
-
-if not os.path.exists(SCORE_FILE):
-
-    default_scores = {
-        "AIライティング": 50,
-        "AI画像生成": 50,
-        "AI動画編集": 50,
-        "AI文字起こし": 50,
-        "AI翻訳": 50,
-        "AIブログ": 50,
-        "AI副業": 50,
-        "SNS運用代行": 50,
-        "ポイ活": 50,
-        "せどり": 50,
-        "クラウドワークス": 50,
-        "ココナラ": 50,
-        "LINEスタンプ": 50,
-        "Canva副業": 50,
-        "TikTok運用": 50
+    params = {
+        "part": "snippet",
+        "q": query,
+        "type": "video",
+        "order": "viewCount",
+        "maxResults": max_results,
+        "key": api_key
     }
 
-    with open(SCORE_FILE, "w", encoding="utf-8") as f:
-        json.dump(default_scores, f, ensure_ascii=False, indent=2)
+    res = requests.get(url, params=params)
+    data = res.json()
+
+    videos = []
+
+    for item in data.get("items", []):
+        title = item["snippet"]["title"]
+        videos.append(title)
+
+    return videos
+
 
 # =========================
-# score.json 読み込み
+# タイトル分析
 # =========================
+def analyze_titles(titles):
 
-with open(SCORE_FILE, "r", encoding="utf-8") as f:
-    scores = json.load(f)
+    words = []
 
-# =========================
-# スコア更新
-# =========================
+    for t in titles:
+        words.extend(t.lower().split())
 
-print("\n=== ANALYZE RESULT ===\n")
+    counter = Counter(words)
 
-for item in video_response["items"]:
+    common_words = counter.most_common(10)
 
-    title = item["snippet"]["title"]
+    return common_words
 
-    views = int(item["statistics"].get("viewCount", 0))
-    likes = int(item["statistics"].get("likeCount", 0))
-    comments = int(item["statistics"].get("commentCount", 0))
-
-    score = (
-        views * 0.01 +
-        likes * 0.5 +
-        comments * 1
-    )
-
-    print("タイトル:", title)
-    print("再生数:", views)
-    print("いいね:", likes)
-    print("コメント:", comments)
-    print("計算スコア:", score)
-
-    # =========================
-    # タイトルから副業ジャンル判定
-    # =========================
-
-    for genre in scores.keys():
-
-        if genre in title:
-
-            scores[genre] += score
-
-            print(f"ジャンル更新: {genre}")
-            print(f"新スコア: {scores[genre]}")
-
-    print("------")
 
 # =========================
-# 保存
+# バズ傾向スコア生成
 # =========================
+def generate_insights(common_words):
 
-with open(SCORE_FILE, "w", encoding="utf-8") as f:
-    json.dump(scores, f, ensure_ascii=False, indent=2)
+    hooks = ["神", "やばい", "衝撃", "簡単", "一瞬", "無料", "バズ"]
+
+    score = 0
+
+    for word, count in common_words:
+        for h in hooks:
+            if h in word:
+                score += count * 10
+
+    return {
+        "trend_score": score,
+        "top_keywords": common_words
+    }
+
 
 # =========================
-# ランキング表示
+# フルパイプライン
 # =========================
+def analyze_youtube(api_key, query="AI動画編集"):
 
-print("\n=== 人気副業ランキング ===\n")
+    print("=== ANALYZING YOUTUBE ===")
 
-sorted_scores = sorted(
-    scores.items(),
-    key=lambda x: x[1],
-    reverse=True
-)
+    titles = fetch_trending_videos(api_key, query)
 
-for rank, (genre, score) in enumerate(sorted_scores, start=1):
+    keywords = analyze_titles(titles)
 
-    print(f"{rank}位: {genre} / SCORE: {round(score, 2)}")
+    insights = generate_insights(keywords)
 
-print("\n=== ANALYZER END ===")
+    print("=== TREND INSIGHTS ===")
+    print(insights)
+
+    return insights
