@@ -1,4 +1,6 @@
 import os
+import json
+import random
 import requests
 from datetime import datetime, date
 
@@ -11,25 +13,20 @@ if not API_KEY:
     exit(1)
 
 # ----------------------------
-# 🎯 副業ジャンル（拡張版）
+# 🎯 副業ジャンル
 # ----------------------------
 JOBS = [
-    # AI系
     "AIライティング副業（文章生成）",
     "AI画像生成副業（イラスト販売）",
     "AI動画編集副業（ショート量産）",
     "AI音声生成副業（ナレーション）",
     "AI翻訳副業",
     "AI要約副業",
-
-    # スキル軽作業系
     "文字起こし副業",
     "データ入力副業",
     "SNS運用代行副業",
     "商品説明文作成副業",
     "Canvaデザイン副業",
-
-    # スマホ完結系
     "メルカリ転売副業",
     "ポイ活副業",
     "アンケート副業",
@@ -38,12 +35,33 @@ JOBS = [
 ]
 
 # ----------------------------
-# 🧠 日替わりテーマ固定
+# 📊 スコア管理（疑似バズ学習）
 # ----------------------------
-today_index = int(date.today().strftime("%Y%m%d")) % len(JOBS)
-job_type = JOBS[today_index]
+SCORE_FILE = "score.json"
 
-print("TODAY THEME:", job_type)
+if os.path.exists(SCORE_FILE):
+    with open(SCORE_FILE, "r", encoding="utf-8") as f:
+        scores = json.load(f)
+else:
+    scores = {job: 1 for job in JOBS}
+
+# 新規ジャンル対応
+for job in JOBS:
+    if job not in scores:
+        scores[job] = 1
+
+# ----------------------------
+# 🧠 バズ優先選択ロジック
+# ----------------------------
+sorted_jobs = sorted(JOBS, key=lambda x: scores.get(x, 1), reverse=True)
+
+# 上位70%＋少しランダム
+top_n = max(3, int(len(JOBS) * 0.7))
+candidates = sorted_jobs[:top_n]
+
+job_type = random.choice(candidates)
+
+print("SELECTED THEME:", job_type)
 
 # ----------------------------
 # ⏰ 朝 / 夕方判定
@@ -54,97 +72,45 @@ mode = "morning" if hour < 12 else "evening"
 print("MODE:", mode)
 
 # ----------------------------
-# 🌅 朝ショート（興味＋軽フォロー）
+# 🌅 朝プロンプト
 # ----------------------------
 morning_prompt = f"""
-あなたはYouTube Shorts台本AIです。
+テーマ: {job_type}
 
-# テーマ
-{job_type}
-
-# 目的
-視聴者の興味を引くショート動画を作る
-
-# ルール
-- 20〜35秒
-- 会話形式（男性＝驚き・質問、女性＝軽く説明）
-- 副業の詳細は絶対に言わない
-- 存在だけ見せる
-- 最後に軽くフォロー誘導（見逃し防止）
-
-# 出力形式
-タイトル:
-男性:
-女性:
-男性:
-女性:
-女性:
-まとめ:
-
-# フォロールール（朝）
-- 押し付けない
-- 「夕方に続きがある」＋「見逃し防止」
+副業の“存在だけ”を見せるShorts台本を作成。
+詳細は禁止。
+最後に軽いフォロー誘導（見逃し防止）。
+会話形式（男＝驚き、女＝軽く説明）。
 """
 
 # ----------------------------
-# 🌇 夕方動画（解説＋強フォロー）
+# 🌇 夕方プロンプト
 # ----------------------------
 evening_prompt = f"""
-あなたはYouTube解説動画台本AIです。
+テーマ: {job_type}
 
-# テーマ
-{job_type}
-
-# 目的
-副業のやり方を完全に解説する
-
-# ルール
-- 45〜90秒
-- 会話形式
-- 男性＝質問・理解
-- 女性＝具体的に説明
-- ステップ形式で説明
-- 必ず実例を入れる
-- 最後に強いフォロー誘導
-
-# 出力形式
-タイトル:
-男性:
-女性:
-男性:
-女性:
-女性:
-まとめ:
-
-# フォロールール（夕方）
-- このチャンネルが毎日違う副業を解説していると伝える
-- 続きが見たい人にフォローを促す
+副業のやり方を完全解説。
+ステップ形式・具体例必須。
+最後に強いフォロー誘導（シリーズ化）。
+会話形式。
 """
 
-# ----------------------------
-# 🤖 プロンプト選択
-# ----------------------------
 prompt = morning_prompt if mode == "morning" else evening_prompt
 
 # ----------------------------
-# 🤖 Gemini API
+# 🤖 API
 # ----------------------------
 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
 
 headers = {"Content-Type": "application/json"}
 
 data = {
-    "contents": [
-        {"parts": [{"text": prompt}]}
-    ]
+    "contents": [{"parts": [{"text": prompt}]}]
 }
 
 print("Requesting Gemini...")
 
 response = requests.post(url, headers=headers, json=data)
-
-print("STATUS:", response.status_code)
-print("RAW:", response.text)
 
 result = response.json()
 
@@ -154,7 +120,7 @@ if "error" in result:
 
 text = result["candidates"][0]["content"]["parts"][0]["text"]
 
-print("\n=== GENERATED SCRIPT ===\n")
+print("\n=== SCRIPT ===\n")
 print(text)
 
 # ----------------------------
@@ -162,9 +128,7 @@ print(text)
 # ----------------------------
 os.makedirs("output", exist_ok=True)
 
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-filename = f"output/{mode}_{timestamp}.txt"
+filename = f"output/{mode}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 
 with open(filename, "w", encoding="utf-8") as f:
     f.write(text)
@@ -172,8 +136,14 @@ with open(filename, "w", encoding="utf-8") as f:
 print("Saved:", filename)
 
 # ----------------------------
-# 📊 メタ情報
+# 📊 疑似バズ更新（ランダムで成長）
 # ----------------------------
-print("\n=== META ===")
-print("MODE:", mode)
-print("THEME:", job_type)
+# ※本来は再生数APIに置き換え
+if job_type:
+    scores[job_type] += random.choice([0, 0, 1, 2])
+
+with open(SCORE_FILE, "w", encoding="utf-8") as f:
+    json.dump(scores, f, ensure_ascii=False, indent=2)
+
+print("\n=== SCORE UPDATED ===")
+print(job_type, "->", scores[job_type])
