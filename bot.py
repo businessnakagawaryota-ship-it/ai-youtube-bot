@@ -1,34 +1,24 @@
-import datetime
-from utils import ensure_dirs, create_dummy_scene
 from script_generator import generate_script
+from image_generator import generate_images
 from voice_generator import generate_voice
-from video_editor import make_video
-
-
-def get_mode():
-    hour = datetime.datetime.now().hour
-    return "SHORT" if hour < 17 else "DETAIL"
-
+from video_builder import build_video
+from thumbnail import make_thumbnail
+from youtube_uploader import upload_video
 
 def main():
     print("=== BOT START ===")
 
-    ensure_dirs()
+    script = generate_script()
 
-    mode = get_mode()
-    print(f"MODE: {mode}")
+    images = generate_images(script)
+    audio = generate_voice(script)
 
-    script = generate_script(mode)
+    video_path = build_video(script, images, audio)
+    thumb_path = make_thumbnail(script)
 
-    voice_path = generate_voice(script)
-
-    image_path = create_dummy_scene()
-
-    video_path = make_video(image_path, voice_path, script)
+    upload_video(video_path, thumb_path, script["title"])
 
     print("=== DONE ===")
-    print(video_path)
-
 
 if __name__ == "__main__":
     main()
