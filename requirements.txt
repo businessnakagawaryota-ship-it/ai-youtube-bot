@@ -1,7 +1,0 @@
-google-genai
-tenacity
-python-dotenv
-requests
-gtts
-moviepy
-pillow
