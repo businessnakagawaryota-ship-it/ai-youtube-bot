@@ -1,51 +1,30 @@
 name: AI YouTube Bot
 
 on:
-
   workflow_dispatch:
-
-  schedule:
-    - cron: '0 22 * * *'
+  push:
+    branches: [ main ]
 
 jobs:
-
   run-bot:
-
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: write
-
     steps:
-
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install packages
-        run: pip install requests google-api-python-client
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run bot
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python bot.py
-
-      - name: Run analyzer
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python youtube_analyzer.py
-
-      - name: Commit score.json
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-
-          git add score.json
-
-          git diff --cached --quiet || git commit -m "Update score.json"
-
-          git push
+          python bot.py
