@@ -12,7 +12,7 @@ YouTube Shorts / TikTok向けに、
 AI副業の台本を作成して
 """
 
-url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={API_KEY}"
 
 headers = {
     "Content-Type": "application/json"
