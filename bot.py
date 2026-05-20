@@ -1,188 +1,82 @@
 import os
-import json
-import random
-import time
-from datetime import datetime
+from gtts import gTTS
+import subprocess
 
-from google import genai
-from google.genai.errors import ClientError
-
+os.makedirs("output", exist_ok=True)
 
 # =========================
-# API設定
+# ① テンプレ台本（安定化）
 # =========================
-API_KEY = os.getenv("GEMINI_API_KEY")
-client = genai.Client(api_key=API_KEY) if API_KEY else None
-
-
-# =========================
-# ジャンル
-# =========================
-GENRES = ["AI画像生成", "AI動画編集", "AI副業"]
-
-
-# =========================
-# バズ構造テンプレ（核心）
-# =========================
-HOOKS = [
-    "え、これAIでできるの！？",
-    "たった3秒で人生変わるレベル",
-    "これ知らないと損してる",
-    "もう手作業には戻れない",
-    "初心者でも一瞬でプロ級"
-]
-
-EMOTIONS = ["驚く", "焦る", "興奮する", "納得する", "感動する"]
-
-CALL_TO_ACTION = [
-    "フォローして続き見てね",
-    "保存して後で試して",
-    "コメントで教えて",
-    "他のAIも見てみる？"
-]
-
+def generate_script():
+    return [
+        ("mio.png", "AI画像生成って実はめっちゃ簡単なんだよ"),
+        ("yuta.png", "え、マジで？"),
+        ("mio.png", "キーワード入れるだけ"),
+        ("yuta.png", "やば、プロレベルじゃん"),
+        ("mio.png", "誰でもできるよ"),
+    ]
 
 # =========================
-# スコアリング（バズ強化版）
+# ② 音声生成
 # =========================
-def score_script(text: str) -> int:
-    score = 50
-
-    if any(h in text for h in HOOKS):
-        score += 15
-    if "フォロー" in text:
-        score += 10
-    if "AI" in text:
-        score += 10
-    if "！" in text:
-        score += 5
-    if "すご" in text or "ヤバ" in text:
-        score += 10
-
-    return min(score, 100)
-
+def make_voice(script):
+    audio_files = []
+    for i, (_, text) in enumerate(script):
+        tts = gTTS(text, lang="ja")
+        path = f"output/audio_{i}.mp3"
+        tts.save(path)
+        audio_files.append(path)
+    return audio_files
 
 # =========================
-# Gemini（使えたら強化）
+# ③ 動画生成
 # =========================
-def call_gemini(prompt, retries=3):
-    if not client:
-        return None
+def make_video(script, audio_files):
+    clips = []
 
-    for i in range(retries):
-        try:
-            res = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt
-            )
-            return res.text
+    for i, (img, _) in enumerate(script):
+        out = f"output/clip_{i}.mp4"
 
-        except ClientError as e:
-            print(f"[Gemini retry {i+1}] {e}")
+        subprocess.run([
+            "ffmpeg", "-y",
+            "-loop", "1",
+            "-i", f"assets/{img}",
+            "-i", audio_files[i],
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-shortest",
+            "-t", "4",
+            "-pix_fmt", "yuv420p",
+            out
+        ])
 
-            if "429" in str(e):
-                time.sleep(5 + i * 10)
-                continue
+        clips.append(out)
 
-            return None
+    # concat
+    with open("output/list.txt", "w") as f:
+        for c in clips:
+            f.write(f"file '{c}'\n")
 
-    return None
-
-
-# =========================
-# 超重要：構造型ローカル生成（完成形）
-# =========================
-def local_generate(genre):
-    hook = random.choice(HOOKS)
-    emotion = random.choice(EMOTIONS)
-    cta = random.choice(CALL_TO_ACTION)
-
-    return f"""
-【0-3秒（フック）】
-ミオ「{hook}」
-ユウタ「えっ！？」
-テロップ：衝撃スタート
-
-【3-10秒】
-ミオがAI（{genre}）を解説
-ユウタが{emotion}
-テロップ：AIで一瞬で変わる
-
-【10-20秒】
-実演シーン
-ユウタ「これやばい…」
-テロップ：プロ級クオリティ
-
-【20-30秒】
-ミオ「君もできるよ」
-ユウタ「やりたい！」
-テロップ：{cta}
-"""
-
+    subprocess.run([
+        "ffmpeg", "-y",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", "output/list.txt",
+        "-c", "copy",
+        "output/final.mp4"
+    ])
 
 # =========================
-# プロンプト（API用）
-# =========================
-def build_prompt(genre):
-    return f"""
-あなたはTikTok/YouTube Shortsのトップディレクター。
-
-ジャンル：{genre}
-
-必須：
-- 30秒構成
-- 0-3秒で強いフック
-- カフェ男女2人
-- セリフ＋テロップ＋SE
-- バズ最優先構造
-- 最後は必ずフォロー誘導
-"""
-
-
-# =========================
-# メイン
+# ④ メイン
 # =========================
 def main():
-    print("=== BOT START ===")
+    print("=== FULL AUTO BOT START ===")
 
-    genre = random.choice(GENRES)
-    print("=== SELECTED GENRE ===")
-    print(genre)
+    script = generate_script()
+    audio = make_voice(script)
+    make_video(script, audio)
 
-    prompt = build_prompt(genre)
-
-    print("=== GENERATING SCRIPT ===")
-
-    script = call_gemini(prompt)
-
-    if not script:
-        print("=== LOCAL MODE (STABLE GENERATION) ===")
-        script = local_generate(genre)
-
-    score = score_script(script)
-
-    print("=== GENERATED SCRIPT ===")
-    print(script)
-    print(f"=== SCORE: {score}/100 ===")
-
-    # 保存
-    os.makedirs("output", exist_ok=True)
-
-    data = {
-        "genre": genre,
-        "script": script,
-        "score": score,
-        "timestamp": datetime.now().isoformat()
-    }
-
-    with open("output/latest_script.txt", "w", encoding="utf-8") as f:
-        f.write(script)
-
-    with open("output/latest_script.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-    print("=== BOT END ===")
-
+    print("完成：output/final.mp4")
 
 if __name__ == "__main__":
     main()
