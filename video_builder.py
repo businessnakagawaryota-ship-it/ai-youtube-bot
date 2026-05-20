@@ -1,46 +1,72 @@
-import subprocess
 import os
+import subprocess
 
-def build_video(script, images, audio):
+OUTPUT_DIR = "output"
+CLIP_DIR = os.path.join(OUTPUT_DIR, "clips")
+LIST_PATH = os.path.join(OUTPUT_DIR, "list.txt")
+OUTPUT_VIDEO = os.path.join(OUTPUT_DIR, "video.mp4")
 
-    os.makedirs("output", exist_ok=True)
 
-    clips = []
+def build_video(script, images=None, audio_path=None):
+    print("=== BUILD VIDEO START ===")
 
-    for i in range(len(script["scenes"])):
+    # ----------------------------------
+    # ① フォルダ作成（重要）
+    # ----------------------------------
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(CLIP_DIR, exist_ok=True)
 
-        out = f"output/clip_{i}.mp4"
+    # ----------------------------------
+    # ② シーン分割（簡易版）
+    # ----------------------------------
+    scenes = script.split("\n")
+    scenes = [s for s in scenes if s.strip()]
+
+    print(f"Scenes: {len(scenes)}")
+
+    clip_paths = []
+
+    # ----------------------------------
+    # ③ clip生成（ここが核心）
+    # ----------------------------------
+    for i, scene in enumerate(scenes):
+        clip_path = os.path.join(CLIP_DIR, f"clip_{i}.mp4")
+        clip_paths.append(clip_path)
+
+        text = scene.replace('"', '').replace("'", "")
 
         cmd = [
-            "ffmpeg", "-y",
-            "-loop", "1",
-            "-i", images[i],
-            "-i", audio[i],
-            "-vf", "zoompan=z='min(zoom+0.0015,1.1)':d=1",
-            "-c:v", "libx264",
-            "-c:a", "aac",
-            "-shortest",
-            out
+            "ffmpeg",
+            "-y",
+            "-f", "lavfi",
+            "-i", "color=c=black:s=1080x1920:d=3",
+            "-vf", f"drawtext=text='{text}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=(h-text_h)/2",
+            clip_path
         ]
 
         subprocess.run(cmd, check=True)
 
-        clips.append(out)
+    # ----------------------------------
+    # ④ list.txt生成（concat用）
+    # ----------------------------------
+    with open(LIST_PATH, "w") as f:
+        for path in clip_paths:
+            f.write(f"file '{path}'\n")
 
-    # concat
-    with open("output/list.txt", "w") as f:
-        for c in clips:
-            f.write(f"file '{c}'\n")
+    # ----------------------------------
+    # ⑤ 動画結合
+    # ----------------------------------
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", LIST_PATH,
+        "-c", "copy",
+        OUTPUT_VIDEO
+    ]
 
-    final = "output/video.mp4"
+    subprocess.run(cmd, check=True)
 
-    subprocess.run([
-        "ffmpeg","-y",
-        "-f","concat",
-        "-safe","0",
-        "-i","output/list.txt",
-        "-c","copy",
-        final
-    ], check=True)
-
-    return final
+    print("=== VIDEO DONE ===")
+    return OUTPUT_VIDEO
