@@ -1,112 +1,78 @@
 import os
+import time
 from google import genai
+from google.genai.errors import ClientError
 
 print("=== BOT START ===")
 
-# Geminiクライアント初期化
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
-def generate_script(genre: str) -> str:
+def generate_script(genre: str):
     prompt = f"""
-あなたはTikTok/YouTube Shorts専門の動画ディレクターです。
+あなたはTikTok/YouTube Shorts専門の動画ディレクター。
 
 # 目的
-バズる実写ショート動画の撮影台本を作る
+バズる実写ショート動画の台本を作る
 
-# 条件
-- 30〜35秒
+# 絶対ルール
+- 30秒固定
 - 実写（カフェ・男女2人：ミオ・ユウタ）
-- SE・テロップ・セリフ必須
-- 秒単位で区切る
 - Markdown禁止
-- タイトル禁止
 - 説明文禁止
+- タイトル禁止
+- 余計な文章禁止
+- 秒構成変更禁止
 
 # 登場人物
-ミオ：AIに詳しい女性（落ち着いている）
-ユウタ：初心者男性（リアクション大きい）
+ミオ：AIに詳しい女性
+ユウタ：初心者男性
 
 # ジャンル
 {genre}
 
-# 出力フォーマット（厳守）
+# 固定秒構成（必ず守る）
+0-3 / 3-6 / 6-9 / 9-12 / 12-15 / 15-18 / 18-21 / 21-24 / 24-27 / 27-30
+
+# 出力フォーマット（完全固定）
 
 【0-3秒】
-映像:
-セリフ:
-テロップ:
-SE:
+映像：1行
+セリフ：1行（なしなら「なし」）
+テロップ：15文字以内
+SE：短い効果音1つ
 
 【3-6秒】
-映像:
-セリフ:
-テロップ:
-SE:
+映像：1行
+セリフ：1行
+テロップ：15文字以内
+SE：短い効果音1つ
 
-【6-9秒】
-映像:
-セリフ:
-テロップ:
-SE:
+（以降同様）
 
-【9-12秒】
-映像:
-セリフ:
-テロップ:
-SE:
-
-【12-15秒】
-映像:
-セリフ:
-テロップ:
-SE:
-
-【15-18秒】
-映像:
-セリフ:
-テロップ:
-SE:
-
-【18-21秒】
-映像:
-セリフ:
-テロップ:
-SE:
-
-【21-24秒】
-映像:
-セリフ:
-テロップ:
-SE:
-
-【24-27秒】
-映像:
-セリフ:
-テロップ:
-SE:
-
-【27-30秒】
-映像:
-セリフ:
-テロップ:
-SE:
-
-# 重要
-- 必ずフォーマット厳守
-- ストーリーではなく撮影台本
-- 余計な文章を書かない
+# 重要制約
+- テロップは必ず短い（15文字以内）
+- SEは1個だけ
+- セリフは1行のみ
+- ストーリー説明禁止
 """
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config={
-            "temperature": 0.4
-        }
-    )
+    for i in range(3):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config={
+                    "temperature": 0.4
+                }
+            )
+            return response.text
 
-    return response.text
+        except ClientError as e:
+            print(f"API error retry {i+1}/3: {e}")
+            time.sleep(5)
+
+    raise Exception("Gemini API failed after retries")
 
 
 if __name__ == "__main__":
@@ -122,7 +88,6 @@ if __name__ == "__main__":
     print("=== GENERATED SCRIPT ===")
     print(script)
 
-    # 保存
     os.makedirs("output", exist_ok=True)
 
     with open("output/latest_script.txt", "w", encoding="utf-8") as f:
