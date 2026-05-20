@@ -1,30 +1,30 @@
-def generate_script(trend):
+import random
 
-    prompt = f"""
-TikTokショート台本を作成してください。
-
-テーマ: {trend}
-
-条件:
-- 30秒以内
-- 会話形式（ミオ・ユウタ）
-- 0-3秒フック必須
-"""
-
+def generate_script(mode="SHORT"):
     try:
-        from google import genai
-        client = genai.Client()
+        return call_ai(mode)
+    except Exception as e:
+        print("AI failed → fallback")
+        return fallback_script(mode)
 
-        res = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
 
-        return res.text
+def call_ai(mode):
+    # ここにGemini入れる想定
+    raise Exception("disabled for safety")
 
-    except Exception:
-        return f"""
-【0-3秒】ミオ「これ知ってる？」ユウタ「何それ？」
-【3-10秒】{trend}解説
-【10-30秒】フォロー誘導
+
+def fallback_script(mode):
+    if mode == "SHORT":
+        return """
+【0-3秒】ユウタ「これ何？」ミオ「AIだよ」
+【3-10秒】ユウタ「すご」ミオ「簡単だよ」
+【10-20秒】実演カット
+【20-30秒】フォローしてね
+"""
+    else:
+        return """
+【導入】AI画像生成の話
+【説明】プロンプトで生成
+【実演】変化を見せる
+【まとめ】誰でもできる
 """
