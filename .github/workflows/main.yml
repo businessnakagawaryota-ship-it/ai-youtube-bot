@@ -1,9 +1,9 @@
-name: run-bot
+name: run-video-bot
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/30 * * * *"  # 30分ごと自動生成
+    - cron: "0 */6 * * *"
 
 jobs:
   run:
@@ -23,10 +23,11 @@ jobs:
       - name: Run bot
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          D_ID_API_KEY: ${{ secrets.D_ID_API_KEY }}
         run: python bot.py
 
-      - name: Upload result
+      - name: Upload video
         uses: actions/upload-artifact@v4
         with:
-          name: generated-script
+          name: video-output
           path: output/
