@@ -1,106 +1,149 @@
 import os
 import json
 import time
+import random
 
-# 新SDK（推奨）
+# Gemini（新SDK）
 from google import genai
 from google.genai import types
 from google.genai.errors import ClientError
 
 
 # =========================
-# Gemini初期化
+# 設定
 # =========================
 API_KEY = os.getenv("GEMINI_API_KEY")
 
-client = None
-if API_KEY:
-    client = genai.Client(api_key=API_KEY)
+client = genai.Client(api_key=API_KEY) if API_KEY else None
 
 
 # =========================
-# フォールバック台本（API死んだ時用）
+# ジャンル
 # =========================
-def fallback_script(genre: str):
-    return f"""【0-3秒】
-映像：カフェでスマホを見るミオとユウタ
-ユウタ：「これってAIでできるの？」
-テロップ：{genre}って何？
-
-【3-6秒】
-ミオ：「実はめっちゃ簡単だよ」
-テロップ：意外と簡単！
-
-【6-10秒】
-ミオがスマホ操作
-ユウタ驚く
-テロップ：一瞬で完成！
-
-【10-15秒】
-ユウタ：「すごすぎる…」
-ミオ：「でしょ？」
-
-【15-20秒】
-ミオ：「フォローして続き見てね」
-テロップ：フォローしてね！
-"""
+GENRES = ["AI画像生成", "AI動画編集", "AI副業"]
 
 
 # =========================
-# Gemini呼び出し
+# ローカル台本テンプレ（10パターン）
 # =========================
-def call_gemini(prompt: str):
-    if client is None:
-        raise Exception("No API key")
+LOCAL_TEMPLATES = [
+    """【0-3秒】映像：カフェでスマホを見るミオとユウタ
+ユウタ「これ何してるの？」
+ミオ「AI画像生成だよ」
+テロップ：AIってすごい
+SE：軽いBGM""",
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        return response.text
+    """【0-3秒】ユウタ「AIって難しいよね？」
+ミオ「実は逆だよ」
+テロップ：意外と簡単
+SE：ポン""",
 
-    except ClientError as e:
-        # 429含め全部ここで処理
-        print("Gemini API Error:", e)
+    """【0-3秒】ユウタが悩む
+ミオがスマホ見せる
+テロップ：一瞬で変わる世界""",
 
-        if "429" in str(e):
-            return None  # ← フォールバックへ
-        raise
+    """【0-3秒】ミオ「これ全部AI」
+ユウタ「え？」
+テロップ：衝撃""",
+
+    """【0-3秒】ユウタ「時間かかる…」
+ミオ「AIで一瞬」
+テロップ：時短革命""",
+
+    """【0-3秒】カフェで会話
+AI画像を見せる
+テロップ：プロ級""",
+
+    """【0-3秒】ユウタ困惑
+ミオ解説
+テロップ：初心者OK""",
+
+    """【0-3秒】スマホ操作
+AI生成開始
+テロップ：自動生成""",
+
+    """【0-3秒】ユウタ驚く
+ミオニヤリ
+テロップ：バズ技""",
+
+    """【0-3秒】ミオ「やってみて」
+ユウタ「すご！」
+テロップ：体験型AI"""
+]
 
 
 # =========================
-# プロンプト生成
+# プロンプト
 # =========================
-def build_prompt(genre: str):
+def build_prompt(genre):
     return f"""
-あなたはTikTok/YouTube Shorts専門の動画ディレクターです。
+あなたはTikTok/YouTube Shorts専門ディレクター。
 
-ジャンル: {genre}
+ジャンル：{genre}
 
-条件:
-- 30秒ショート動画台本
-- カフェで男女2人
-- セリフ・テロップ・SEを必ず入れる
+条件：
+- 30秒ショート動画
+- カフェの男女2人
+- セリフ・テロップ・SE必須
 - バズ重視
-- 簡潔に
-
-形式:
-【0-3秒】
-映像:
-セリフ:
-テロップ:
-SE:
+- 簡潔
 """
 
 
 # =========================
-# メイン処理
+# Gemini呼び出し（超安定版）
+# =========================
+def call_gemini(prompt, retries=3):
+    if not client:
+        return None
+
+    for i in range(retries):
+        try:
+            res = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
+            return res.text
+
+        except ClientError as e:
+            print(f"Gemini error {i+1}/{retries}: {e}")
+
+            # 429は待つ
+            if "429" in str(e):
+                wait = 10 + i * 5
+                print(f"wait {wait}s...")
+                time.sleep(wait)
+                continue
+
+            return None
+
+    return None
+
+
+# =========================
+# ローカル生成（必ず動く）
+# =========================
+def local_generate(genre):
+    base = random.choice(LOCAL_TEMPLATES)
+
+    extra = f"""
+
+【後半補足】
+ジャンル：{genre}
+ミオが解説してユウタが驚く構成
+フォロー誘導あり
+"""
+
+    return base + extra
+
+
+# =========================
+# メイン
 # =========================
 def main():
     print("=== BOT START ===")
 
-    genre = "AI画像生成"
+    genre = random.choice(GENRES)
     print("=== SELECTED GENRE ===")
     print(genre)
 
@@ -108,24 +151,27 @@ def main():
 
     print("=== GENERATING SCRIPT ===")
 
-    text = call_gemini(prompt)
+    script = call_gemini(prompt)
 
-    # ===== フォールバック =====
-    if text is None:
-        print("API limit → fallback mode")
-        text = fallback_script(genre)
+    if script is None:
+        print("→ fallback mode")
+        script = local_generate(genre)
 
     print("=== GENERATED SCRIPT ===")
-    print(text)
+    print(script)
 
     # 保存
     os.makedirs("output", exist_ok=True)
 
     with open("output/latest_script.txt", "w", encoding="utf-8") as f:
-        f.write(text)
+        f.write(script)
 
     with open("output/latest_script.json", "w", encoding="utf-8") as f:
-        json.dump({"script": text}, f, ensure_ascii=False, indent=2)
+        json.dump({
+            "genre": genre,
+            "script": script,
+            "timestamp": time.time()
+        }, f, ensure_ascii=False, indent=2)
 
     print("=== BOT END ===")
 
