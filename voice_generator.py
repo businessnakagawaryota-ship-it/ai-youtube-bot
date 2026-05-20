@@ -1,13 +1,17 @@
 from gtts import gTTS
 import os
 
+def generate_voice(script):
+    os.makedirs("output/audio", exist_ok=True)
 
-def generate_voice(text):
-    path = "output/voice.mp3"
+    audio_files = []
 
-    os.makedirs("output", exist_ok=True)
+    for i, s in enumerate(script["scenes"]):
+        path = f"output/audio/{i}.mp3"
 
-    tts = gTTS(text=text, lang="ja")
-    tts.save(path)
+        tts = gTTS(s["text"], lang="ja")
+        tts.save(path)
 
-    return path
+        audio_files.append(path)
+
+    return audio_files
