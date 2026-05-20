@@ -1,41 +1,63 @@
-from buzz_engine import generate_hook, generate_cta, score_script
+from trend_prompt_engine import build_dynamic_prompt
+from youtube_trend import fetch_videos, extract_keywords
+import os
 
-def generate_final_script(topic):
+def generate_final_script(topic, api_key=None):
 
-    hook = generate_hook()
-    cta = generate_cta()
+    # APIある場合：トレンド取得
+    if api_key:
+        titles = fetch_videos(api_key, topic)
+        keywords = extract_keywords(titles)
 
-    script = f"""
-【タイトル】
-{topic}で人生変わった件
+        prompt = build_dynamic_prompt(topic, keywords)
 
-【フック】
-ミオ「{hook}」
-ユウタ「え、それ何！？」
+        script = ai_generate_stub(prompt)
 
-【本編】
-0-3秒：衝撃スタート
-ユウタ「これマジ？」
-ミオ「AI使えば一瞬だよ」
-
-3-10秒
-ミオが解説
-ユウタ驚く
-
-10-20秒
-実演パート
-ユウタ「やば…」
-
-20-27秒
-ミオ「誰でもできる」
-
-27-30秒
-ミオ「{cta}」
-"""
-
-    score = score_script(script)
-
-    if score < 40:
-        script += "\n※再生成推奨レベル"
+    else:
+        script = fallback_script(topic)
 
     return script
+
+
+# =========================
+# AI生成（ダミー or 本体差し替え）
+# =========================
+def ai_generate_stub(prompt):
+
+    return f"""
+【トレンド反映台本】
+
+{prompt}
+
+0-3秒
+ミオ「え、これ今めっちゃバズってるやつ」
+
+ユウタ「マジで？」
+
+3-10秒
+AI活用説明
+
+10-20秒
+実演
+
+20-27秒
+ユウタ驚く
+
+27-30秒
+ミオ「フォローして続き見てね」
+"""
+
+
+def fallback_script(topic):
+
+    return f"""
+【安定版】
+
+0-3秒
+ミオ「これ知ってる？」
+
+ユウタ「知らない」
+
+3-30秒
+説明構成
+"""
