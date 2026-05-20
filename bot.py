@@ -1,95 +1,134 @@
 import os
+import json
 import time
-from datetime import datetime
+
+# 新SDK（推奨）
 from google import genai
 from google.genai import types
+from google.genai.errors import ClientError
 
+
+# =========================
+# Gemini初期化
+# =========================
 API_KEY = os.getenv("GEMINI_API_KEY")
 
-client = genai.Client(api_key=API_KEY)
+client = None
+if API_KEY:
+    client = genai.Client(api_key=API_KEY)
 
-GENRE = "AI画像生成"
 
-SYSTEM_PROMPT = """
-あなたはTikTok/YouTube Shorts専門のトップ動画ディレクター。
+# =========================
+# フォールバック台本（API死んだ時用）
+# =========================
+def fallback_script(genre: str):
+    return f"""【0-3秒】
+映像：カフェでスマホを見るミオとユウタ
+ユウタ：「これってAIでできるの？」
+テロップ：{genre}って何？
 
-必ず以下ルールを守る：
+【3-6秒】
+ミオ：「実はめっちゃ簡単だよ」
+テロップ：意外と簡単！
 
-- 30秒ショート台本
-- 1シーン3秒刻み（0-30秒）
-- 必ず「映像・セリフ・テロップ・SE」を書く
-- 無駄な前置き禁止
-- JSONではなくテキストのみ
-- 絵コンテ形式で出力
-- 絶対に説明しない
+【6-10秒】
+ミオがスマホ操作
+ユウタ驚く
+テロップ：一瞬で完成！
+
+【10-15秒】
+ユウタ：「すごすぎる…」
+ミオ：「でしょ？」
+
+【15-20秒】
+ミオ：「フォローして続き見てね」
+テロップ：フォローしてね！
 """
 
-def call_gemini(prompt, retry=3):
-    for i in range(retry):
-        try:
-            res = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt
-            )
-            return res.text
-        except Exception as e:
-            print(f"API retry {i+1}/{retry}: {e}")
-            time.sleep(5 * (i + 1))
-    raise Exception("API failed")
 
-def build_prompt():
+# =========================
+# Gemini呼び出し
+# =========================
+def call_gemini(prompt: str):
+    if client is None:
+        raise Exception("No API key")
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        return response.text
+
+    except ClientError as e:
+        # 429含め全部ここで処理
+        print("Gemini API Error:", e)
+
+        if "429" in str(e):
+            return None  # ← フォールバックへ
+        raise
+
+
+# =========================
+# プロンプト生成
+# =========================
+def build_prompt(genre: str):
     return f"""
-{SYSTEM_PROMPT}
+あなたはTikTok/YouTube Shorts専門の動画ディレクターです。
 
-テーマ: {GENRE}
+ジャンル: {genre}
 
-構成:
-0-30秒のショート動画台本を作成
+条件:
+- 30秒ショート動画台本
+- カフェで男女2人
+- セリフ・テロップ・SEを必ず入れる
+- バズ重視
+- 簡潔に
 
-必須フォーマット:
-
+形式:
 【0-3秒】
 映像:
 セリフ:
 テロップ:
 SE:
-
-【3-6秒】
-...
-
-必ず最後まで埋める
-短くテンポ良く
-バズ重視
 """
 
-def save(text):
-    os.makedirs("output", exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = f"output/{ts}.txt"
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
 
-    with open("output/latest_script.txt", "w", encoding="utf-8") as f:
-        f.write(text)
-
-    print(f"Saved: {path}")
-
+# =========================
+# メイン処理
+# =========================
 def main():
     print("=== BOT START ===")
+
+    genre = "AI画像生成"
     print("=== SELECTED GENRE ===")
-    print(GENRE)
+    print(genre)
+
+    prompt = build_prompt(genre)
 
     print("=== GENERATING SCRIPT ===")
-    prompt = build_prompt()
 
     text = call_gemini(prompt)
+
+    # ===== フォールバック =====
+    if text is None:
+        print("API limit → fallback mode")
+        text = fallback_script(genre)
 
     print("=== GENERATED SCRIPT ===")
     print(text)
 
-    save(text)
+    # 保存
+    os.makedirs("output", exist_ok=True)
+
+    with open("output/latest_script.txt", "w", encoding="utf-8") as f:
+        f.write(text)
+
+    with open("output/latest_script.json", "w", encoding="utf-8") as f:
+        json.dump({"script": text}, f, ensure_ascii=False, indent=2)
 
     print("=== BOT END ===")
+
 
 if __name__ == "__main__":
     main()
