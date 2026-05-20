@@ -2,11 +2,10 @@ import os
 import requests
 from datetime import datetime
 
-API_KEY = os.getenv("GEMINI_API_KEY")
-
 print("BOT START")
 
-# APIキー確認
+API_KEY = os.getenv("GEMINI_API_KEY")
+
 if not API_KEY:
     print("ERROR: GEMINI_API_KEY is missing")
     exit(1)
@@ -17,25 +16,24 @@ YouTube Shorts / TikTok向けに、
 AI副業についての縦動画用台本を作成してください。
 
 条件:
-- 30〜45秒程度
+- 30〜45秒
 - 最初の1文で強く興味を引く
 - 初心者向け
 - 難しい言葉を使わない
-- スマホだけでできる内容
-- 通勤・移動中にできる内容
-- 無料AIを中心にする
-- 1文を短く
-- テロップ向き
-- TikTok / Shorts向けテンポ
-- 最後に行動を促す一言
+- スマホだけでできる
+- 通勤中でもできる
+- 無料AI中心
+- 1文は短く
+- テロップ向け
+- 最後に軽く行動促進
 
 出力形式:
 タイトル:
 台本:
 """
 
-# ★安定版モデル（ここが重要）
-url = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={API_KEY}"
+# ★ここが最重要（現状これが一番安定）
+url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
 
 headers = {
     "Content-Type": "application/json"
@@ -59,7 +57,6 @@ try:
 
     result = response.json()
 
-    # エラー検知
     if "error" in result:
         print("API ERROR DETECTED")
         exit(1)
