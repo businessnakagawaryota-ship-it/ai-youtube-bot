@@ -2,34 +2,30 @@ name: run-bot
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 * * * *"  # 1時間ごと（任意）
 
 jobs:
   run:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-    - name: Install ffmpeg
-      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Install dependencies
-      run: pip install -r requirements.txt
+      - name: Install deps
+        run: pip install -r requirements.txt
 
-    - name: Run bot
-      env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      run: python bot.py
+      - name: Run bot
+        run: python bot.py
 
-    - name: Upload output
-      uses: actions/upload-artifact@v4
-      with:
-        name: video-output
-        path: output/
+      - name: Upload output
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-output
+          path: output/
