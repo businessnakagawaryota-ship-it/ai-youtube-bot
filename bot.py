@@ -6,6 +6,7 @@ API_KEY = os.getenv("GEMINI_API_KEY")
 
 print("BOT START")
 
+# APIキー確認
 if not API_KEY:
     print("ERROR: GEMINI_API_KEY is missing")
     exit(1)
@@ -18,7 +19,7 @@ AI副業についての縦動画用台本を作成してください。
 条件:
 - 30〜45秒程度
 - 最初の1文で強く興味を引く
-- 初者向け
+- 初心者向け
 - 難しい言葉を使わない
 - スマホだけでできる内容
 - 通勤・移動中にできる内容
@@ -33,8 +34,8 @@ AI副業についての縦動画用台本を作成してください。
 台本:
 """
 
-# ★ここが重要（最新安定版）
-url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+# ★安定版モデル（ここが重要）
+url = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={API_KEY}"
 
 headers = {
     "Content-Type": "application/json"
@@ -58,6 +59,7 @@ try:
 
     result = response.json()
 
+    # エラー検知
     if "error" in result:
         print("API ERROR DETECTED")
         exit(1)
