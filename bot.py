@@ -1,106 +1,139 @@
 import os
 import json
-import time
-import google.generativeai as genai
+from datetime import datetime
+from google import genai
+from google.genai import types
 
-# ========= CONFIG =========
-API_KEY = os.environ.get("GEMINI_API_KEY")
-MODEL_NAME = "gemini-2.5-flash"
+# =========================
+# Gemini API設定
+# =========================
+API_KEY = os.getenv("GEMINI_API_KEY")
 
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel(MODEL_NAME)
+if not API_KEY:
+    raise ValueError("GEMINI_API_KEY is not set")
 
-OUTPUT_DIR = "output"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-
-# ========= GEMINI CALL =========
-def generate_content(prompt: str):
-    response = model.generate_content(
-        prompt,
-        generation_config={
-            "temperature": 0.8,
-            "max_output_tokens": 4096
-        }
-    )
-    return response
+client = genai.Client(api_key=API_KEY)
 
 
-# ========= SAFE TEXT EXTRACTION =========
-def extract_text(response):
+# =========================
+# ジャンル選択（今は固定 or 拡張可）
+# =========================
+GENRES = [
+    "AI文字起こし",
+    "AIブログ副業",
+    "AI画像生成",
+    "AI動画編集"
+]
+
+def select_genre():
+    # 今はランダムでもOK（後で拡張可）
+    import random
+    return random.choice(GENRES)
+
+
+# =========================
+# プロンプト生成
+# =========================
+def build_prompt(genre: str) -> str:
+    return f"""
+あなたはTikTok・YouTube Shorts専門のトップ動画ディレクターです。
+
+以下の条件でバズる実写ショート動画台本を作ってください：
+
+# ジャンル
+{genre}
+
+# 条件
+- 30〜40秒
+- 実写（カフェ・男女2人：ミオとユウタ）
+- 会話ベースでテンポよく
+- 視聴維持率最優先
+- 冒頭3秒で必ずフック
+- セリフ・映像・SE・テロップを必ず分ける
+- AI副業系でリアルに感じる内容
+
+# 出力形式
+【0-3秒】
+カメラ:
+映像:
+動き:
+セリフ:
+テロップ:
+SE:
+"""
+
+
+# =========================
+# Gemini呼び出し
+# =========================
+def generate_script(prompt: str) -> str:
     try:
-        parts = response.candidates[0].content.parts
-        return "".join([p.text for p in parts if hasattr(p, "text")])
-    except Exception:
-        return ""
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+
+        if not response or not response.text:
+            raise Exception("Empty response from Gemini")
+
+        return response.text
+
+    except Exception as e:
+        return f"[ERROR] Gemini API failed: {str(e)}"
 
 
-# ========= CONTINUATION FIX =========
-def continue_generation(prev_text: str):
-    follow_prompt = f"""
-途中で切れているので続きを書いてください。
-前の続きとして自然につなげてください。
+# =========================
+# 保存処理
+# =========================
+def save_output(text: str, genre: str):
+    os.makedirs("output", exist_ok=True)
 
----ここまで---
-{prev_text[-1500:]}
----続き---
-"""
-    res = generate_content(follow_prompt)
-    return extract_text(res)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    file_path = f"output/{timestamp}.txt"
+    json_path = f"output/{timestamp}.json"
 
-# ========= MAIN =========
-def run_bot():
-    print("=== BOT START ===")
-
-    genre = "AI動画編集"  # 仮
-    mode = "short"
-
-    prompt = f"""
-あなたはTikTok・YouTube Shortsのトップ動画ディレクターです。
-
-ジャンル: {genre}
-モード: {mode}
-
-必ず以下形式で出力：
-・0〜35秒のショート動画台本
-・実写（カフェ・男女2人）
-・カメラ指示あり
-・セリフあり
-・SEあり
-・テロップあり
-・途中で絶対に途切れない構成
-"""
-
-    response = generate_content(prompt)
-
-    text = extract_text(response)
-
-    # ========= 自動補完（途中切れ対策） =========
-    if len(text) > 0:
-        # 明らかに途中で終わっている場合だけ追記
-        if not text.strip().endswith("】") and len(text) > 300:
-            print("=== DETECTED CUT OFF → CONTINUING ===")
-            extra = continue_generation(text)
-            text += "\n" + extra
-
-    # ========= SAVE =========
-    ts = time.strftime("%Y%m%d_%H%M%S")
-    out_path = f"{OUTPUT_DIR}/{ts}.txt"
-
-    with open(out_path, "w", encoding="utf-8") as f:
+    with open(file_path, "w", encoding="utf-8") as f:
         f.write(text)
 
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "genre": genre,
+                "timestamp": timestamp,
+                "text": text
+            },
+            f,
+            ensure_ascii=False,
+            indent=2
+        )
+
+    print(f"Saved: {file_path}")
+    print(f"Saved: {json_path}")
+
+
+# =========================
+# メイン処理
+# =========================
+def main():
+    print("=== BOT START ===")
+
+    genre = select_genre()
+    print(f"=== SELECTED GENRE ===\n{genre}")
+
+    prompt = build_prompt(genre)
+
+    print("=== GENERATING SCRIPT ===")
+
+    script = generate_script(prompt)
+
     print("=== GENERATED SCRIPT ===")
-    print(text)
-    print(f"Saved: {out_path}")
+    print(script[:2000])  # ログ爆発防止
+
+    save_output(script, genre)
 
     print("=== BOT END ===")
 
 
 if __name__ == "__main__":
-    try:
-        run_bot()
-    except Exception as e:
-        print("ERROR:", str(e))
-        exit(1)
+    main()
