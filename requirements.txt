@@ -1,2 +1,5 @@
-gtts
-pillow
+gTTS
+moviepy
+Pillow
+requests
+google-api-python-client
